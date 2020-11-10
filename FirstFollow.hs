@@ -1,3 +1,8 @@
+module FirstFollow
+  ( firstSet
+  , followSet
+  ) where
+
 import Data.String
 import Data.List
 
@@ -37,17 +42,15 @@ instance Show Grammar where
 -- Helper function for firstSet which uses continuation passing to deal with
 -- epsilons.
 firstSetProd :: Grammar -> [Node] -> Node -> [Node]
-firstSetProd (Grammar rules) _ (T s) = [T s]
-firstSetProd (Grammar rules) (h:tl) Epsilon =
-    firstSetProd (Grammar rules) tl h
-firstSetProd (Grammar rules) _ Epsilon = []
+firstSetProd _ _ (T s) = [T s]
+firstSetProd g (h:tl) Epsilon = firstSetProd g tl h
+firstSetProd _ _ Epsilon = []
 firstSetProd (Grammar rules) cont (N symbol) =
     let production = find (\r -> lhs r == (N symbol)) rules
-     in case production of 
-          Just (Rule {rhs=r}) -> concat $
-              map getFirst r where
-                  getFirst (s:ss) =
-                      firstSetProd (Grammar rules) (ss ++ cont) s
+    in case production of
+         Just (Rule {rhs=r}) -> concat $ map getFirst r
+            where getFirst (s:ss) = firstSetProd (Grammar rules) (ss ++ cont) s
+         Nothing -> []
 
 -- Given a grammar and a symbol, return a list of the first set of the symbol
 -- according to the given grammar.
@@ -60,18 +63,17 @@ relevantRules :: Grammar -> Node -> Grammar
 relevantRules (Grammar g) (N nt) =
     Grammar $ filter (\rule -> concat (rhs rule) /= []) $
         map (\rule -> Rule { lhs = lhs rule
-                                 , rhs = filter (elem (N nt)) (rhs rule)
-                                 }) g
+                           , rhs = filter (elem (N nt)) (rhs rule)
+                           }) g
 
 followSetProd :: Grammar -> Node -> [Node] -> Node -> [Node]
 followSetProd g lhs prod node =
     let indices = elemIndices node prod
-     in concat $ map (\i -> if i < (length prod) - 1
-                               then firstSetProd g (drop (i+2) prod) $
-                                   prod !! (i + 1)
-                      else followSet g lhs
-                     )
-            indices
+    in concat $ map (\i -> if i < (length prod) - 1
+                           then firstSetProd g (drop (i+2) prod) $
+                                prod !! (i + 1)
+                           else followSet g lhs)
+       indices
 
 followSetRule :: Grammar -> Rule -> Node -> [Node]
 followSetRule g rule node =
@@ -89,4 +91,4 @@ followSet (Grammar g) (N nt) =
           Grammar [] -> []
           Grammar [r] -> followSetRule augGrammar r (N nt)
           Grammar (r:rs) -> nub $ (followSetRule augGrammar r (N nt)) ++
-              (followSet (Grammar rs) (N nt))
+                            (followSet (Grammar rs) (N nt))

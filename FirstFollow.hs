@@ -1,7 +1,4 @@
-module FirstFollow
-  ( firstSet
-  , followSet
-  ) where
+module FirstFollow where
 
 import Data.String
 import Data.List

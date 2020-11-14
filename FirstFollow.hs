@@ -2,18 +2,25 @@ module FirstFollow where
 
 import Data.String
 import Data.List
+import qualified Data.Map as Map
 
 -- Node represents either a non-terminal or terminal symbol, or the special
 -- epsilon type which represents the empty derivation.
-data Node = N String | T String | Epsilon
+data Node = N String | T String | Epsilon deriving(Ord)
+
+type Production = [Node]
 
 -- The lhs of a rule must be a non-terminal.
 data Rule = Rule { lhs :: Node
-                 , rhs :: [[Node]]
+                 , rhs :: [Production]
                  }
 
 -- Make this a type so that we can make it part of the Show typeclass.
 data Grammar = Grammar [Rule]
+
+data Work = Work { first :: Map.Map Node [Node]
+                 , follow :: Map.Map Node [Node]
+                 }
 
 instance Show Node where
     show (N n) = "<" ++ n ++ ">"
@@ -38,21 +45,23 @@ instance Show Grammar where
 
 -- Helper function for firstSet which uses continuation passing to deal with
 -- epsilons.
-firstSetProd :: Grammar -> [Node] -> Node -> [Node]
-firstSetProd _ _ (T s) = [T s]
-firstSetProd g (h:tl) Epsilon = firstSetProd g tl h
-firstSetProd _ _ Epsilon = []
-firstSetProd (Grammar rules) cont (N symbol) =
-    let production = find (\r -> lhs r == (N symbol)) rules
-    in case production of
-         Just (Rule {rhs=r}) -> concat $ map getFirst r
-            where getFirst (s:ss) = firstSetProd (Grammar rules) (ss ++ cont) s
-         Nothing -> []
+firstSetProd :: Grammar -> [Node] -> [Node]
+firstSetProd _ [] = []
+firstSetProd _ ((T s):tl) = [T s]
+firstSetProd g (Epsilon:tl) = firstSetProd g tl
+firstSetProd g ((N symbol):tl) =
+    let firstOfNonT = firstSet g (N symbol) in
+    if Epsilon `elem` firstOfNonT
+    then (firstOfNonT \\ [Epsilon]) ++ (firstSetProd g tl)
+    else firstOfNonT
 
 -- Given a grammar and a symbol, return a list of the first set of the symbol
 -- according to the given grammar.
 firstSet :: Grammar -> Node -> [Node]
-firstSet g n = nub $ firstSetProd g [] n
+firstSet (Grammar rules) n =
+    let rule = find (\r -> lhs r == n) rules in
+    case rule of Just Rule{ rhs = rhs } -> nub $ concat $ map
+                                        (firstSetProd (Grammar rules)) rhs
 
 -- Filters down a grammer to only the rules which contain the given non-terminal
 -- on the rhs.
@@ -63,13 +72,14 @@ relevantRules (Grammar g) (N nt) =
                            , rhs = filter (elem (N nt)) (rhs rule)
                            }) g
 
-followSetProd :: Grammar -> Node -> [Node] -> Node -> [Node]
+followSetProd :: Grammar -> Node -> Production -> Node -> [Node]
 followSetProd g lhs prod node =
     let indices = elemIndices node prod
     in concat $ map (\i -> if i < (length prod) - 1
-                           then firstSetProd g (drop (i+2) prod) $
-                                prod !! (i + 1)
-                           else followSet g lhs)
+                           then firstSetProd g (drop (i+1) prod)
+                           else if lhs == node
+                                then []
+                                else followSet g lhs)
        indices
 
 followSetRule :: Grammar -> Rule -> Node -> [Node]
@@ -87,5 +97,5 @@ followSet (Grammar g) (N nt) =
      in case relRules of
           Grammar [] -> []
           Grammar [r] -> followSetRule augGrammar r (N nt)
-          Grammar (r:rs) -> nub $ (followSetRule augGrammar r (N nt)) ++
-                            (followSet (Grammar rs) (N nt))
+          Grammar (r:rs) -> nub $ concat $
+              map (\x -> followSetRule augGrammar x (N nt)) (r:rs)

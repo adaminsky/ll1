@@ -14,7 +14,7 @@ loop :: Grammar -> IO ()
 loop g = do
   var <- getLine
   case parse nonterminal "" var of
-    Left err -> putStrLn "Fail"
+    Left err -> putStrLn $ show err
     Right nt -> do let firsts = show $ firstSet g nt
                        follows = show $ followSet g nt
                    putStrLn $ "First Set of " ++ show nt ++ " is: " ++ firsts
@@ -25,5 +25,5 @@ main = do
   x <- readHelper
   putStrLn "Queries:"
   case parse parseGrammar "" $ concat x of
-    Left err -> putStrLn "Fail"
+    Left err -> putStrLn $ show err
     Right g -> loop g

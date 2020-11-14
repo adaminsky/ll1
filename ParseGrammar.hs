@@ -12,10 +12,16 @@ one or more, and '*' to mean zero or more.
 
 <Grammar> -> +(<Rule>)
 <Rule> -> <NT> -> <SF> *(| <SF>)
-<SF> -> <SF><SF> | <NT> | <T>
+<SF> -> <SF><SF> | <NT> | <T> | <Epsilon>
 <NT> -> [A-Z]
 <T> -> [a-z]
+<Epsilon> -> '_'
 -}
+
+epsilon :: Parser Node
+epsilon = do
+    char '_'
+    return Epsilon
 
 nonterminal :: Parser Node
 nonterminal = do
@@ -28,13 +34,14 @@ terminal = do
   return $ T $ [toLower t]
 
 parseSF :: Parser [Node]
-parseSF = many1 (nonterminal <|> terminal)
+parseSF = many1 (nonterminal <|> terminal <|> epsilon)
 
 parseRHSLast :: Parser [Node]
 parseRHSLast = do
   char '|'
   spaces
   r <- parseSF
+  spaces
   return r
 
 parseRHS :: Parser [[Node]]
@@ -52,7 +59,6 @@ parseRule = do
   char '>'
   spaces
   rhs <- parseRHS
-  newline
   return $ Rule{lhs=lhs, rhs=rhs}
 
 parseGrammar :: Parser Grammar
